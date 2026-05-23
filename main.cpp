@@ -20,7 +20,6 @@ struct compare
     }
 };
 
-
 void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &out, std::string path = "")
 {
     if (!head)
@@ -96,8 +95,6 @@ int compress(std::string input, std::string output)
         count++;
     }
 
-    
-
     // build tree;
     while (pq.size() > 1)
     {
@@ -122,35 +119,37 @@ int compress(std::string input, std::string output)
     std::string extension = "";
     for (size_t i = input.size(); i-- > 0;)
     {
-        if(input[i] == '.'){
+        if (input[i] == '.')
+        {
             break;
-        }else{
+        }
+        else
+        {
             extension = input[i] + extension;
         }
     }
-    if(input == extension){
+    if (input == extension)
+    {
         extension = "";
     }
 
     uint8_t ext_size = extension.length();
-    if(ext_size != extension.length()){
+    if (ext_size != extension.length())
+    {
         ext_size == 0;
     }
 
-    out.write(reinterpret_cast<char*>(&ext_size),sizeof(ext_size));
+    out.write(reinterpret_cast<char *>(&ext_size), sizeof(ext_size));
 
     for (int i = 0; i < ext_size; i++)
     {
-        out<<extension[i];
+        out << extension[i];
     }
-    
 
     for (size_t i = 0; i < count; i++)
     {
         /* code */
     }
-    
-
 
     uint64_t file_size = head->f;
     out.write(reinterpret_cast<char *>(&file_size), sizeof(file_size));
@@ -210,26 +209,27 @@ int decompress(std::string input, std::string output)
     {
         return 3;
     }
-    
-    uint8_t  ext_size = 0;
-    
-    in.read(reinterpret_cast<char*>(&ext_size),sizeof(uint8_t));
-    
+
+    uint8_t ext_size = 0;
+
+    in.read(reinterpret_cast<char *>(&ext_size), sizeof(uint8_t));
+
     char c;
     std::string ext = ".";
     for (size_t i = 0; i < ext_size; i++)
     {
         if (in.get(c))
         {
-            ext+=c;
-        }else{
+            ext += c;
+        }
+        else
+        {
             return 5;
         }
     }
 
-    output+=ext;
-    
-    
+    output += ext;
+
     std::ofstream out(output, std::ios::binary);
     if (!out.is_open())
     {
@@ -270,16 +270,15 @@ int decompress(std::string input, std::string output)
         t = head;
     };
 
+    if (ext_size == 0)
+    {
+        return 6;
+    }
     return 0;
 }
 
-int main()
+void show_reason(int status)
 {
-    std::string input = "gita.txt";
-    std::string output = "gita(cmp).huff";
-    std::string recovery = "gita-recovered.txt";
-
-    int status = compress(input, output);
     if (status == 0)
     {
         std::cout << "OK" << std::endl;
@@ -298,31 +297,57 @@ int main()
         {
             std::cout << "decompressor input file error" << std::endl;
         }
-        else
-            std::cout << "Error" << std::endl;
-    }
-
-    status = decompress(output, recovery);
-
-    if (status == 0)
-    {
-        std::cout << "OK" << std::endl;
-    }
-    else
-    {
-        if (status == 1)
+        else if (status == 4)
         {
-            std::cout << "compressor input file error" << std::endl;
+            std::cout << "decompressor output file error" << std::endl;
         }
-        else if (status == 2)
+        else if (status == 5)
         {
-            std::cout << "compressor output file error" << std::endl;
+            std::cout << "compressed file was corrupted" << std::endl;
         }
-        else if (status == 3)
+        else if (status == 6)
         {
-            std::cout << "decompressor input file error" << std::endl;
+            std::cout << "file extension could not be recovered" << std::endl;
         }
         else
             std::cout << "Error" << std::endl;
     }
+}
+
+void show_help(){
+    std::cout << "Usage:" <<std::endl;
+    std::cout << "huffcodec compress \"<input_file_path>\" \"<output_file_path>\"" << std::endl;
+    std::cout << "huffcodec decompress \"<input_file_path>\" \"<output_file_path>\"" << std::endl;
+}
+
+int main(int argc, char* argv[])
+{
+    
+    if(argc<4){
+        show_help();
+        return 1;
+    }
+
+    std::string mode = argv[1];
+    std::string input = argv[2];
+    std::string output = argv[3];
+
+    int status = 0;
+    
+    if (mode == "compress")
+    {
+        status = compress(input,output);
+    }else if(mode == "decompress"){
+        status = decompress(input,output);
+    }else {
+        std::cout << "Unknown mode: " << mode << std::endl;
+    }
+    
+
+    if (status!=0)
+    {
+        show_reason(status);
+    }
+    return status;
+
 }
