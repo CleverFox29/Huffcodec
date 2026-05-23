@@ -6,5 +6,5 @@ A lossless file compressing and decompressing software that works in the termina
 3) Storage of file extension: extension is preserved and will be appended to the name of the decopressor's output file
 4) Speed: native c++ code with negligible overheads.
 ## Usage
-huffcodec compress "<input_file_path>" "<output_file_path>"
-huffcodec decompress "<input_file_path>" "<output_file_path>"
+1) huffcodec compress "<input_file_path>" "<output_file_path>"
+2) huffcodec decompress "<input_file_path>" "<output_file_path>"
