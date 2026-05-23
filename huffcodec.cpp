@@ -288,7 +288,7 @@ int decompress(std::string input, std::string output)
             output_ext = "";
             break;
         }else{
-            output_ext =output_ext+output[i];
+            output_ext =output[i]+output_ext;
         }
     }
     if (output == output_ext)
