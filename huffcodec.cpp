@@ -87,6 +87,49 @@ void accumulator(bool val, std::ofstream &out)
     }
 }
 
+
+//unused method that i thought was useful and later found useless
+void bunch_duplicates_frequencies(std::priority_queue<node *, std::vector<node *>, compare> &pq)
+{
+    std::priority_queue<node *, std::vector<node *>, compare> temp;
+    bool dup = true;
+    while (dup)
+    {
+        dup = false;
+        while (!pq.empty())
+        {
+
+            node *i = pq.top();
+            pq.pop();
+            std::vector<node *> v;
+            v.push_back(i);
+            while (!pq.empty() && pq.top()->f == i->f)
+            {
+                v.push_back(pq.top());
+                pq.pop();
+                dup = true;
+            }
+            int n = v.size();
+
+            std::vector<node *> tree;
+            tree.reserve(2 * n - 1);
+            tree.assign(n - 1, nullptr);
+            tree.insert(tree.end(), v.begin(), v.end());
+
+            for (size_t i = n - 1; i-- > 0;)
+            {
+                node *&t = tree[i];
+                t = new node();
+                t->left = tree[2 * i + 1];
+                t->right = tree[2 * i + 2];
+                t->f = t->left->f + t->right->f;
+            }
+            temp.push(tree[0]);
+        }
+        std::swap(pq, temp);
+    }
+}
+
 int compress(std::string input, std::string output)
 {
     std::ifstream in(input, std::ios::binary);
