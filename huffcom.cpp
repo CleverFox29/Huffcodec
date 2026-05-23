@@ -90,9 +90,30 @@ void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &o
     }
 }
 
+uint8_t cursor = 128;
+uint8_t x = 0;
+void flush(std::ofstream &out)
+{
+    out.write(
+        reinterpret_cast<char *>(&x),
+        sizeof(x));
+    x = 0;
+    cursor = 128;
+}
+void accumulator(bool val, std::ofstream &out)
+{
+    x += cursor * val;
+    cursor >>= 1;
+    if (cursor == 0)
+    {
+        flush(out);
+    }
+}
+
 int compress(std::string input, std::string output)
 {
-    std::ifstream in(input,std:: ios:: binary);
+    std::ifstream in(input, std::ios::binary);
+    std::ofstream out(output, std::ios::binary);
     std::map<char, uint64_t> mp;
 
     std::priority_queue<node *, std::vector<node *>, compare> pq;
@@ -100,6 +121,10 @@ int compress(std::string input, std::string output)
     if (!in.is_open())
     {
         return 1; // file failed to open
+    }
+    if (!out.is_open())
+    {
+        return 2;
     }
 
     // creating frequency table;
@@ -147,11 +172,6 @@ int compress(std::string input, std::string output)
     node *head = pq.top();
 
     uint64_t file_size = head->f;
-    std::ofstream out(output,std::ios::binary);
-    if (!out.is_open())
-    {
-        return 2;
-    }
     out.write(reinterpret_cast<char *>(&file_size), sizeof(file_size));
 
     // for quick encoding
@@ -167,13 +187,19 @@ int compress(std::string input, std::string output)
     {
         for (char i : huffmap[c])
         {
-            if(i == '1'){
-
-            }else if(i=='0'){
-
+            if (i == '1')
+            {
+                accumulator(true, out);
+            }
+            else if (i == '0')
+            {
+                accumulator(false, out);
             }
         }
     }
+    if (cursor != 0)
+        flush(out);
+    flush(out);
 
     return 0;
 }
@@ -200,12 +226,12 @@ node *readtree(std::ifstream &in)
 
 int decompress(std::string input, std::string output)
 {
-    std::ifstream in(input,std::ios::binary);
+    std::ifstream in(input, std::ios::binary);
     if (!in.is_open())
     {
         return 3;
     }
-    std::ofstream out(output,std::ios::binary);
+    std::ofstream out(output, std::ios::binary);
     if (!out.is_open())
     {
         return 4;
@@ -219,11 +245,31 @@ int decompress(std::string input, std::string output)
 
     node *head = readtree(in);
 
-    // for quick encoding
-    std::map<char, std::string> huffmap;
+    node *t = head;
 
-    // populates huffman also writes map to file in preorder
-    map_path(head, huffmap, out);
+    uint8_t x;
+    uint8_t seek = 0;
+
+    for (uint64_t i = 0; i < file_size; i++)
+    {
+
+        while (t->left || t->right)
+        {
+            if (seek == 0)
+            {
+                seek = 128;
+                in.read(reinterpret_cast<char *>(&x), sizeof(x));
+            }
+            bool val = seek & x;
+            seek>>=1;
+            if (val)
+                t = t->right;
+            else
+                t = t->left;
+        }
+        out << t->data;
+        t = head;
+    };
 
     return 0;
 }
@@ -239,24 +285,24 @@ int main()
     std::cout << std::endl;
     if (status == 0)
     {
-        std::cout << "OK";
+        std::cout << "OK" << std::endl;
     }
     else
     {
         if (status == 1)
         {
-            std::cout << "compressor input file error"<<std::endl;
+            std::cout << "compressor input file error" << std::endl;
         }
         else if (status == 2)
         {
-            std::cout << "compressor output file error"<<std::endl;
+            std::cout << "compressor output file error" << std::endl;
         }
         else if (status == 3)
         {
-            std::cout << "decompressor input file error"<<std::endl;
+            std::cout << "decompressor input file error" << std::endl;
         }
         else
-            std::cout << "Error"<<std::endl;
+            std::cout << "Error" << std::endl;
     }
 
     status = decompress(output, recovery);
@@ -264,23 +310,23 @@ int main()
     std::cout << std::endl;
     if (status == 0)
     {
-        std::cout << "OK"<<std::endl;
+        std::cout << "OK" << std::endl;
     }
     else
     {
         if (status == 1)
         {
-            std::cout << "compressor input file error"<<std::endl;
+            std::cout << "compressor input file error" << std::endl;
         }
         else if (status == 2)
         {
-            std::cout << "compressor output file error"<<std::endl;
+            std::cout << "compressor output file error" << std::endl;
         }
         else if (status == 3)
         {
-            std::cout << "decompressor input file error"<<std::endl;
+            std::cout << "decompressor input file error" << std::endl;
         }
         else
-            std::cout << "Error"<<std::endl;
+            std::cout << "Error" << std::endl;
     }
 }
