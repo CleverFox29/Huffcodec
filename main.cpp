@@ -1,11 +1,9 @@
 #include <iostream>
 #include <string>
-#include <unordered_map>
 #include <map>
 #include <fstream>
 #include <queue>
 #include <cstdint>
-#include <vector>
 
 struct node
 {
@@ -22,78 +20,31 @@ struct compare
     }
 };
 
-void bunch_duplicates_frequencies(std::priority_queue<node *, std::vector<node *>, compare> &pq)
-{
-    std::priority_queue<node *, std::vector<node *>, compare> temp;
-    bool dup = true;
-    while (dup)
-    {
-        dup = false;
-        while (!pq.empty())
-        {
 
-            node *i = pq.top();
-            pq.pop();
-            std::vector<node *> v;
-            v.push_back(i);
-            while (!pq.empty() && pq.top()->f == i->f)
-            {
-                v.push_back(pq.top());
-                pq.pop();
-                dup = true;
-            }
-            int n = v.size();
-
-            std::vector<node *> tree;
-            tree.reserve(2 * n - 1);
-            tree.assign(n - 1, nullptr);
-            tree.insert(tree.end(), v.begin(), v.end());
-
-            for (size_t i = n - 1; i-- > 0;)
-            {
-                node *&t = tree[i];
-                t = new node();
-                t->left = tree[2 * i + 1];
-                t->right = tree[2 * i + 2];
-                t->f = t->left->f + t->right->f;
-            }
-            temp.push(tree[0]);
-        }
-        std::swap(pq, temp);
-    }
-}
-
-int cnt = 0;
-
-void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &out, std::string path = "", bool root = true)
+void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &out, std::string path = "")
 {
     if (!head)
         return;
 
     if (!head->left && !head->right)
     {
-        std::cout << head->data << ": " << head->f << "  \t" << path << std::endl;
         out << 1 << head->data;
         huffmap[head->data] = path;
-        cnt++;
     }
     else
     {
         out << 0;
     }
-    map_path(head->left, huffmap, out, path + "0", false);
-    map_path(head->right, huffmap, out, path + "1", false);
-    if (root)
-    {
-        std::cout << cnt << " unique characters encoded" << std::endl;
-        cnt = 0;
-    }
+    map_path(head->left, huffmap, out, path + "0");
+    map_path(head->right, huffmap, out, path + "1");
 }
 
 uint8_t cursor = 128;
 uint8_t x = 0;
 void flush(std::ofstream &out)
 {
+    if (cursor == 128)
+        return;
     out.write(
         reinterpret_cast<char *>(&x),
         sizeof(x));
@@ -142,13 +93,10 @@ int compress(std::string input, std::string output)
         t->data = i.first;
         t->f = i.second;
         pq.push(t);
-        std::cout << t->data << ": " << t->f << std::endl;
         count++;
     }
-    std::cout << count << " unique characters found." << std::endl;
 
-    // checkout for the twist;
-    bunch_duplicates_frequencies(pq);
+    
 
     // build tree;
     while (pq.size() > 1)
@@ -170,6 +118,39 @@ int compress(std::string input, std::string output)
     }
 
     node *head = pq.top();
+
+    std::string extension = "";
+    for (size_t i = input.size(); i-- > 0;)
+    {
+        if(input[i] == '.'){
+            break;
+        }else{
+            extension = input[i] + extension;
+        }
+    }
+    if(input == extension){
+        extension = "";
+    }
+
+    uint8_t ext_size = extension.length();
+    if(ext_size != extension.length()){
+        ext_size == 0;
+    }
+
+    out.write(reinterpret_cast<char*>(&ext_size),sizeof(ext_size));
+
+    for (int i = 0; i < ext_size; i++)
+    {
+        out<<extension[i];
+    }
+    
+
+    for (size_t i = 0; i < count; i++)
+    {
+        /* code */
+    }
+    
+
 
     uint64_t file_size = head->f;
     out.write(reinterpret_cast<char *>(&file_size), sizeof(file_size));
@@ -197,8 +178,6 @@ int compress(std::string input, std::string output)
             }
         }
     }
-    if (cursor != 0)
-        flush(out);
     flush(out);
 
     return 0;
@@ -231,6 +210,26 @@ int decompress(std::string input, std::string output)
     {
         return 3;
     }
+    
+    uint8_t  ext_size = 0;
+    
+    in.read(reinterpret_cast<char*>(&ext_size),sizeof(uint8_t));
+    
+    char c;
+    std::string ext = ".";
+    for (size_t i = 0; i < ext_size; i++)
+    {
+        if (in.get(c))
+        {
+            ext+=c;
+        }else{
+            return 5;
+        }
+    }
+
+    output+=ext;
+    
+    
     std::ofstream out(output, std::ios::binary);
     if (!out.is_open())
     {
@@ -261,7 +260,7 @@ int decompress(std::string input, std::string output)
                 in.read(reinterpret_cast<char *>(&x), sizeof(x));
             }
             bool val = seek & x;
-            seek>>=1;
+            seek >>= 1;
             if (val)
                 t = t->right;
             else
@@ -281,8 +280,6 @@ int main()
     std::string recovery = "gita-recovered.txt";
 
     int status = compress(input, output);
-
-    std::cout << std::endl;
     if (status == 0)
     {
         std::cout << "OK" << std::endl;
@@ -307,7 +304,6 @@ int main()
 
     status = decompress(output, recovery);
 
-    std::cout << std::endl;
     if (status == 0)
     {
         std::cout << "OK" << std::endl;
