@@ -47,48 +47,72 @@ struct compare
     }
 };
 
-void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &out, std::string path = "")
-{
-    if (!head)
-        return;
 
-    if (!head->left && !head->right)
-    {
-        out << 1 << head->data;
-        huffmap[head->data] = path;
-    }
-    else
-    {
-        out << 0;
-    }
-    map_path(head->left, huffmap, out, path + "0");
-    map_path(head->right, huffmap, out, path + "1");
-}
-
-uint8_t cursor = 128;
-uint8_t x = 0;
+//bitwise writing mechanism
+uint8_t write_cursor = 128;
+uint8_t x_write = 0;
 void flush(std::ofstream &out)
 {
-    if (cursor == 128)
+    if (write_cursor == 128)
         return;
     out.write(
-        reinterpret_cast<char *>(&x),
-        sizeof(x));
-    x = 0;
-    cursor = 128;
+        reinterpret_cast<char *>(&x_write),
+        sizeof(x_write));
+    x_write = 0;
+    write_cursor = 128;
 }
-void accumulator(bool val, std::ofstream &out)
+void collectNWrite(bool val, std::ofstream &out)
 {
-    x += cursor * val;
-    cursor >>= 1;
-    if (cursor == 0)
+    x_write += write_cursor * val;
+    write_cursor >>= 1;
+    if (write_cursor == 0)
     {
         flush(out);
     }
 }
 
 
-//unused method that i thought was useful and later found useless
+//bitwise read mechanism
+uint8_t cursor = 0;
+uint8_t x = 0;
+void next_byte(std::ifstream & in){
+    cursor = 128;
+    in.read(reinterpret_cast<char*>(&x), sizeof(x));
+}
+bool collectNRead(std::ifstream& in){
+    if (cursor == 0)
+    {
+        next_byte(in);
+    }
+    bool val = cursor & x;
+    cursor>>=1;
+    return val;
+}
+
+void map_path(node *head, std::map<char, std::string> &huffmap, std::ofstream &out, std::string path = "", bool root = true)
+{
+    if (!head)
+        return;
+
+    if (!head->left && !head->right)
+    {
+        collectNWrite(true,out);
+        char c = head->data;
+        for(int i = 0; i < sizeof(c)*8;i++){
+            collectNWrite(1<<(sizeof(c)*8-i-1) & c,out);
+        }
+        huffmap[head->data] = path;
+    }
+    else
+    {
+        collectNWrite(false,out);
+    }
+    map_path(head->left, huffmap, out, path + "0",false);
+    map_path(head->right, huffmap, out, path + "1",false);
+    
+}
+
+// unused method that i thought was useful and later found useless
 void bunch_duplicates_frequencies(std::priority_queue<node *, std::vector<node *>, compare> &pq)
 {
     std::priority_queue<node *, std::vector<node *>, compare> temp;
@@ -189,77 +213,79 @@ int compress(std::string input, std::string output)
 
     node *head = pq.top();
 
+
+    //reading file extension
     std::string extension = "";
     for (size_t i = input.size(); i-- > 0;)
     {
         if (input[i] == '.')
         {
             break;
-        }else if(input[i] == '\\' || input[i]  == '/'){
+        }
+        else if (input[i] == '\\' || input[i] == '/')
+        {
             extension = "";
             break;
-        }else{
-            extension =input[i]+extension;
+        }
+        else
+        {
+            extension = input[i] + extension;
         }
     }
     if (input == extension)
     {
         extension = "";
     }
-
     uint8_t ext_size = extension.length();
     if (ext_size != extension.length())
     {
         ext_size == 0;
     }
 
+    //writing the extension
     out.write(reinterpret_cast<char *>(&ext_size), sizeof(ext_size));
-
     for (int i = 0; i < ext_size; i++)
     {
         out << extension[i];
     }
 
-    for (size_t i = 0; i < count; i++)
-    {
-        /* code */
-    }
-
+    
+    //writing file size in bytes
     uint64_t file_size = head->f;
     out.write(reinterpret_cast<char *>(&file_size), sizeof(file_size));
 
     // for quick encoding
     std::map<char, std::string> huffmap;
-
-    // populates huffman also writes map to file in preorder
+    // populates huffmap also writes map to file in preorder
     map_path(head, huffmap, out);
 
     in.clear();
     in.seekg(0);
 
+    // writes the compressed file
     while (in.get(c))
     {
         for (char i : huffmap[c])
         {
             if (i == '1')
             {
-                accumulator(true, out);
+                collectNWrite(true, out);
             }
             else if (i == '0')
             {
-                accumulator(false, out);
+                collectNWrite(false, out);
             }
         }
     }
     flush(out);
     out.flush();
     out.clear();
-    out.seekp(0);
 
-    std::ifstream outreader(output,std::ios::binary);
+    // calculates and writes the hash to the beginning of the file
+    out.seekp(0);
+    std::ifstream outreader(output, std::ios::binary); //object to read the file to make the hash
     outreader.seekg(sizeof(crc));
     crc = crc64(outreader);
-
     out.write(reinterpret_cast<char *>(&crc), sizeof(crc));
 
     return 0;
@@ -268,19 +294,20 @@ int compress(std::string input, std::string output)
 node *readtree(std::ifstream &in)
 {
     node *t = new node();
-    char c;
-    if (!in.get(c))
-        return nullptr;
-    if (c == '0')
+    bool val = collectNRead(in);
+    if (val)
+    {
+        char c = 0;
+        for (int i = 0; i < sizeof(c)*8; i++)
+        {
+            c+= collectNRead(in) * (1<<(sizeof(c)*8-i-1));
+        }
+        t->data = c;
+    }
+    else
     {
         t->left = readtree(in);
         t->right = readtree(in);
-    }
-    else if (c == '1')
-    {
-        if (!in.get(c))
-            return nullptr;
-        t->data = c;
     }
     return t;
 }
@@ -293,20 +320,19 @@ int decompress(std::string input, std::string output)
         return 3;
     }
 
+    //hash verification
     uint64_t crc;
-    in.read(reinterpret_cast<char*>(&crc),sizeof(crc));
-
-    if(crc != crc64(in)){
+    in.read(reinterpret_cast<char *>(&crc), sizeof(crc));
+    if (crc != crc64(in))
+    {
         return 7;
     }
-
     in.clear();
     in.seekg(sizeof(crc));
 
+    //reading extension from file
     uint8_t ext_size = 0;
-
     in.read(reinterpret_cast<char *>(&ext_size), sizeof(uint8_t));
-
     char c;
     std::string ext = "";
     for (size_t i = 0; i < ext_size; i++)
@@ -321,33 +347,35 @@ int decompress(std::string input, std::string output)
         }
     }
 
+
+    //reading outputfile extension
     std::string output_ext = "";
-    for (size_t i = output.size(); i--  > 0;)
+    for (size_t i = output.size(); i-- > 0;)
     {
         if (output[i] == '.')
         {
             break;
-        }else if(output[i] == '\\' || output[i]  == '/'){
+        }
+        else if (output[i] == '\\' || output[i] == '/')
+        {
             output_ext = "";
             break;
-        }else{
-            output_ext =output[i]+output_ext;
+        }
+        else
+        {
+            output_ext = output[i] + output_ext;
         }
     }
     if (output == output_ext)
     {
-        output_ext = "" ;
+        output_ext = "";
     }
-
-
-
     
-
+    //if both extensions are not same then append the new extension
     if (ext != output_ext)
     {
-        output += "."+ext;
+        output += "." + ext;
     }
-
 
     std::ofstream out(output, std::ios::binary);
     if (!out.is_open())
@@ -355,31 +383,26 @@ int decompress(std::string input, std::string output)
         return 4;
     }
 
+    //read file size
     uint64_t file_size = 0;
-
     in.read(
         reinterpret_cast<char *>(&file_size),
         sizeof(file_size));
 
+    
+    // reconstruction of tree
     node *head = readtree(in);
-
     node *t = head;
 
+    //interpreting the file
     uint8_t x;
     uint8_t seek = 0;
-
     for (uint64_t i = 0; i < file_size; i++)
     {
 
         while (t->left || t->right)
         {
-            if (seek == 0)
-            {
-                seek = 128;
-                in.read(reinterpret_cast<char *>(&x), sizeof(x));
-            }
-            bool val = seek & x;
-            seek >>= 1;
+            bool val = collectNRead(in);
             if (val)
                 t = t->right;
             else
@@ -427,11 +450,12 @@ void show_reason(int status)
         else if (status == 6)
         {
             std::cout << "file extension could not be recovered" << std::endl;
-        }else if (status ==7)
-        {
-            std::cout<<"file corruption detected" <<std::endl;
         }
-        
+        else if (status == 7)
+        {
+            std::cout << "file corruption detected" << std::endl;
+        }
+
         else
             std::cout << "Error" << std::endl;
     }
